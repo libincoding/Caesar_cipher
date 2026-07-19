@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Caesar Cipher — Encrypt & Decrypt</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+  :root {
+    --bg:        #0a0c0f;
+    --surface:   #0f1318;
+    --panel:     #131920;
+    --border:    #1e2d3d;
+    --accent:    #00d4ff;
+    --accent2:   #00ff9d;
+    --danger:    #ff3c5f;
+    --warn:      #ffaa00;
+    --text:      #c9d8e8;
+    --muted:     #4a6278;
+    --mono:      'Share Tech Mono', monospace;
+    --sans:      'Rajdhani', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,212,255,0.015) 2px,
+      rgba(0,212,255,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── Grid background ── */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    padding: 3rem 0 2.5rem;
+  }
+
+  .logo-line {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    opacity: 0.8;
+  }
+
+  h1 {
+    font-family: var(--sans);
+    font-size: clamp(2.2rem, 6vw, 4rem);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    color: #fff;
+  }
+
+  h1 span.glow {
+    color: var(--accent);
+    text-shadow: 0 0 30px rgba(0,212,255,0.6), 0 0 60px rgba(0,212,255,0.3);
+  }
+
+  .subtitle {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.75rem;
+    letter-spacing: 0.15em;
+  }
+
+  /* ── Mode toggle ── */
+  .mode-toggle {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin: 2.5rem auto 2rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    width: fit-content;
+    background: var(--surface);
+  }
+
+  .mode-btn {
+    padding: 0.65rem 2.5rem;
+    font-family: var(--sans);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    color: var(--muted);
+  }
+
+  .mode-btn.active-encrypt {
+    background: var(--accent);
+    color: #000;
+  }
+
+  .mode-btn.active-decrypt {
+    background: var(--accent2);
+    color: #000;
+  }
+
+  /* ── Main panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(0,212,255,0.05), 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #febc2e; }
+  .dot-g { background: #28c840; }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-left: 0.5rem;
+    letter-spacing: 0.1em;
+  }
+
+  .panel-body {
+    padding: 2rem;
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  /* ── Labels ── */
+  label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  /* ── Textarea ── */
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    padding: 1rem;
+    resize: vertical;
+    min-height: 120px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+    line-height: 1.6;
+  }
+
+  textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,212,255,0.15);
+  }
+
+  /* ── Shift row ── */
+  .shift-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.5rem;
+    align-items: end;
+  }
+
+  .shift-control { display: grid; gap: 0.5rem; }
+
+  .shift-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+  }
+
+  input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(0,212,255,0.5);
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 20px rgba(0,212,255,0.8);
+  }
+
+  .shift-val {
+    font-family: var(--mono);
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--accent);
+    min-width: 2.5rem;
+    text-align: right;
+    text-shadow: 0 0 15px rgba(0,212,255,0.5);
+  }
+
+  /* ── Action button ── */
+  .action-btn {
+    padding: 0.85rem 2rem;
+    border-radius: 6px;
+    border: none;
+    font-family: var(--sans);
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    align-self: end;
+  }
+
+  .btn-encrypt {
+    background: var(--accent);
+    color: #000;
+    box-shadow: 0 0 20px rgba(0,212,255,0.3);
+  }
+
+  .btn-encrypt:hover {
+    box-shadow: 0 0 40px rgba(0,212,255,0.6);
+    transform: translateY(-1px);
+  }
+
+  .btn-decrypt {
+    background: var(--accent2);
+    color: #000;
+    box-shadow: 0 0 20px rgba(0,255,157,0.3);
+  }
+
+  .btn-decrypt:hover {
+    box-shadow: 0 0 40px rgba(0,255,157,0.6);
+    transform: translateY(-1px);
+  }
+
+  /* ── Output box ── */
+  .output-wrap {
+    position: relative;
+  }
+
+  .output-box {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    padding: 1rem;
+    min-height: 120px;
+    line-height: 1.6;
+    word-break: break-all;
+    transition: border-color 0.3s;
+    white-space: pre-wrap;
+  }
+
+  .output-box.has-content {
+    border-color: rgba(0,255,157,0.3);
+    box-shadow: 0 0 20px rgba(0,255,157,0.05);
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    background: var(--border);
+    border: none;
+    border-radius: 4px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: 0.3rem 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .copy-btn:hover { background: var(--accent); color: #000; }
+
+  /* ── Alphabet visualizer ── */
+  .alpha-section {
+    margin-top: 0.5rem;
+  }
+
+  .alpha-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+  }
+
+  .alpha-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .alpha-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .alpha-orig {
+    width: 26px; height: 26px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .alpha-shifted {
+    width: 26px; height: 26px;
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent);
+    transition: all 0.15s;
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex;
+    gap: 2rem;
+    padding: 1rem 2rem;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .stat-val {
+    font-family: var(--mono);
+    font-size: 1rem;
+    color: var(--accent);
+  }
+
+  /* ── History ── */
+  .history-section {
+    margin-top: 2rem;
+  }
+
+  .section-title {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .history-list {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    transition: border-color 0.2s;
+  }
+
+  .history-item:hover { border-color: var(--muted); }
+
+  .history-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    font-weight: bold;
+  }
+
+  .badge-enc { background: rgba(0,212,255,0.15); color: var(--accent); }
+  .badge-dec { background: rgba(0,255,157,0.15); color: var(--accent2); }
+
+  .history-text { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-result { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-shift { color: var(--warn); }
+
+  /* ── Brute force section ── */
+  .brute-section {
+    margin-top: 2rem;
+  }
+
+  .brute-grid {
+    display: grid;
+    gap: 0.4rem;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+
+  .brute-grid::-webkit-scrollbar { width: 4px; }
+  .brute-grid::-webkit-scrollbar-track { background: var(--bg); }
+  .brute-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .brute-row {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .brute-row:hover {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.05);
+  }
+
+  .brute-shift { color: var(--warn); font-size: 0.65rem; }
+  .brute-text { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .clear-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: auto;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .clear-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--accent2);
+    color: #000;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    padding: 0.75rem 1.25rem;
+    border-radius: 6px;
+    box-shadow: 0 0 30px rgba(0,255,157,0.4);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 1000;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* ── Cursor blink ── */
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .cursor { animation: blink 1s infinite; color: var(--accent); }
+
+  /* ── Glow pulse ── */
+  @keyframes glow-pulse {
+    0%,100% { text-shadow: 0 0 20px rgba(0,212,255,0.4); }
+    50% { text-shadow: 0 0 40px rgba(0,212,255,0.8), 0 0 80px rgba(0,212,255,0.3); }
+  }
+  h1 span.glow { animation: glow-pulse 3s ease-in-out infinite; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .shift-row { grid-template-columns: 1fr; }
+    .history-item { grid-template-columns: auto 1fr auto; }
+    .history-result { display: none; }
+    .stats-bar { gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-line">// cybersecurity tools / v2.0 /</div>
+    <h1>CAESAR <span class="glow">CIPHER</span><span class="cursor">_</span></h1>
+    <p class="subtitle">[ encrypt · decrypt · brute-force · analyze ]</p>
+  </header>
+
+  <!-- MODE TOGGLE -->
+  <div class="mode-toggle">
+    <button class="mode-btn active-encrypt" id="btnEncrypt" onclick="setMode('encrypt')">⬆ ENCRYPT</button>
+    <button class="mode-btn" id="btnDecrypt" onclick="setMode('decrypt')">⬇ DECRYPT</button>
+    <button class="mode-btn" id="btnBrute" onclick="setMode('brute')">💀 BRUTE FORCE</button>
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+      <span class="panel-title" id="panelTitle">caesar_cipher.exe — ENCRYPT MODE</span>
+    </div>
+
+    <div class="panel-body">
+
+      <!-- INPUT -->
+      <div>
+        <label id="inputLabel">// INPUT MESSAGE</label>
+        <textarea id="inputText" placeholder="Type your message here..." oninput="liveProcess()"></textarea>
+      </div>
+
+      <!-- SHIFT + ACTION (hidden in brute mode) -->
+      <div class="shift-row" id="shiftRow">
+        <div class="shift-control">
+          <label>// SHIFT KEY (1 – 25)</label>
+          <div class="shift-slider-wrap">
+            <input type="range" min="1" max="25" value="3" id="shiftSlider" oninput="updateShift()"/>
+            <span class="shift-val" id="shiftDisplay">3</span>
+          </div>
+        </div>
+        <button class="action-btn btn-encrypt" id="mainBtn" onclick="processMain()">ENCRYPT →</button>
+      </div>
+
+      <!-- ALPHABET VISUALIZER -->
+      <div class="alpha-section" id="alphaSection">
+        <div class="alpha-label">// alphabet mapping (original → shifted)</div>
+        <div class="alpha-grid" id="alphaGrid"></div>
+      </div>
+
+      <!-- OUTPUT -->
+      <div class="output-wrap" id="outputSection">
+        <label id="outputLabel">// OUTPUT</label>
+        <div class="output-box" id="outputBox">Waiting for input<span class="cursor">_</span></div>
+        <button class="copy-btn" onclick="copyOutput()">COPY</button>
+      </div>
+
+      <!-- BRUTE FORCE GRID -->
+      <div id="bruteSection" style="display:none;">
+        <label>// ALL 25 POSSIBLE DECRYPTIONS — click any to use it</label>
+        <button class="clear-btn" onclick="clearInput()">CLEAR</button>
+        <div class="brute-grid" id="bruteGrid"></div>
+      </div>
+
+    </div>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-label">Characters</span>
+        <span class="stat-val" id="statChars">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Letters</span>
+        <span class="stat-val" id="statLetters">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Words</span>
+        <span class="stat-val" id="statWords">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Mode</span>
+        <span class="stat-val" id="statMode" style="color:var(--accent)">ENCRYPT</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Shift</span>
+        <span class="stat-val" id="statShift" style="color:var(--warn)">3</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="history-section" id="historySection" style="display:none;">
+    <div class="section-title">operation log</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── State ──
+  let mode = 'encrypt';
+  let history = [];
+
+  // ── Caesar Core ──
+  function caesar(text, shift, direction) {
+    const s = direction === 'decrypt' ? (26 - shift) % 26 : shift;
+    return text.split('').map(ch => {
+      if (/[A-Z]/.test(ch)) return String.fromCharCode((ch.charCodeAt(0) - 65 + s) % 26 + 65);
+      if (/[a-z]/.test(ch)) return String.fromCharCode((ch.charCodeAt(0) - 97 + s) % 26 + 97);
+      return ch;
+    }).join('');
+  }
+
+  // ── Mode ──
+  function setMode(m) {
+    mode = m;
+    const btns = document.querySelectorAll('.mode-btn');
+    btns.forEach(b => { b.classList.remove('active-encrypt','active-decrypt'); });
+
+    const titles = { encrypt: 'caesar_cipher.exe — ENCRYPT MODE', decrypt: 'caesar_cipher.exe — DECRYPT MODE', brute: 'caesar_cipher.exe — BRUTE FORCE MODE' };
+    document.getElementById('panelTitle').textContent = titles[m];
+    document.getElementById('statMode').textContent = m.toUpperCase();
+
+    if (m === 'encrypt') {
+      document.getElementById('btnEncrypt').classList.add('active-encrypt');
+      document.getElementById('statMode').style.color = 'var(--accent)';
+      document.getElementById('inputLabel').textContent = '// INPUT MESSAGE';
+      document.getElementById('outputLabel').textContent = '// ENCRYPTED OUTPUT';
+      document.getElementById('mainBtn').textContent = 'ENCRYPT →';
+      document.getElementById('mainBtn').className = 'action-btn btn-encrypt';
+      document.getElementById('shiftRow').style.display = 'grid';
+      document.getElementById('alphaSection').style.display = 'block';
+      document.getElementById('outputSection').style.display = 'block';
+      document.getElementById('bruteSection').style.display = 'none';
+    } else if (m === 'decrypt') {
+      document.getElementById('btnDecrypt').classList.add('active-decrypt');
+      document.getElementById('statMode').style.color = 'var(--accent2)';
+      document.getElementById('inputLabel').textContent = '// ENCRYPTED MESSAGE';
+      document.getElementById('outputLabel').textContent = '// DECRYPTED OUTPUT';
+      document.getElementById('mainBtn').textContent = '← DECRYPT';
+      document.getElementById('mainBtn').className = 'action-btn btn-decrypt';
+      document.getElementById('shiftRow').style.display = 'grid';
+      document.getElementById('alphaSection').style.display = 'block';
+      document.getElementById('outputSection').style.display = 'block';
+      document.getElementById('bruteSection').style.display = 'none';
+    } else {
+      document.getElementById('btnBrute').classList.add('active-encrypt');
+      document.getElementById('statMode').style.color = 'var(--danger)';
+      document.getElementById('inputLabel').textContent = '// CIPHERTEXT TO CRACK';
+      document.getElementById('shiftRow').style.display = 'none';
+      document.getElementById('alphaSection').style.display = 'none';
+      document.getElementById('outputSection').style.display = 'none';
+      document.getElementById('bruteSection').style.display = 'block';
+    }
+    liveProcess();
+    renderAlpha();
+  }
+
+  // ── Shift update ──
+  function updateShift() {
+    const v = document.getElementById('shiftSlider').value;
+    document.getElementById('shiftDisplay').textContent = v;
+    document.getElementById('statShift').textContent = v;
+    liveProcess();
+    renderAlpha();
+  }
+
+  // ── Alphabet grid ──
+  function renderAlpha() {
+    const shift = parseInt(document.getElementById('shiftSlider').value);
+    const grid = document.getElementById('alphaGrid');
+    const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    grid.innerHTML = '';
+    for (let i = 0; i < 26; i++) {
+      const shifted = alpha[(i + shift) % 26];
+      const cell = document.createElement('div');
+      cell.className = 'alpha-cell';
+      cell.innerHTML = `<div class="alpha-orig">${alpha[i]}</div><div class="alpha-shifted">${shifted}</div>`;
+      grid.appendChild(cell);
+    }
+  }
+
+  // ── Live process ──
+  function liveProcess() {
+    const text = document.getElementById('inputText').value;
+    updateStats(text);
+    if (mode === 'brute') { renderBrute(text); return; }
+    if (!text.trim()) {
+      const ob = document.getElementById('outputBox');
+      ob.innerHTML = 'Waiting for input<span class="cursor">_</span>';
+      ob.classList.remove('has-content');
+      return;
+    }
+    const shift = parseInt(document.getElementById('shiftSlider').value);
+    const result = caesar(text, shift, mode);
+    const ob = document.getElementById('outputBox');
+    ob.textContent = result;
+    ob.classList.add('has-content');
+  }
+
+  // ── Process + log to history ──
+  function processMain() {
+    const text = document.getElementById('inputText').value.trim();
+    if (!text) { showToast('⚠ Enter a message first'); return; }
+    const shift = parseInt(document.getElementById('shiftSlider').value);
+    const result = caesar(text, shift, mode);
+    addHistory(mode, text, result, shift);
+    showToast(mode === 'encrypt' ? '🔒 Encrypted!' : '🔓 Decrypted!');
+  }
+
+  // ── Brute force ──
+  function renderBrute(text) {
+    const grid = document.getElementById('bruteGrid');
+    if (!text.trim()) { grid.innerHTML = '<div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);padding:0.5rem;">Enter encrypted text above...</div>'; return; }
+    grid.innerHTML = '';
+    for (let s = 1; s <= 25; s++) {
+      const result = caesar(text, s, 'decrypt');
+      const row = document.createElement('div');
+      row.className = 'brute-row';
+      row.innerHTML = `<span class="brute-shift">SHIFT ${String(s).padStart(2,'0')}</span><span class="brute-text">${result}</span>`;
+      row.onclick = () => {
+        navigator.clipboard.writeText(result).catch(()=>{});
+        showToast(`✅ Shift ${s} copied — "${result.slice(0,30)}${result.length>30?'...':''}"`);
+        addHistory('brute', text, result, s);
+      };
+      grid.appendChild(row);
+    }
+  }
+
+  // ── Stats ──
+  function updateStats(text) {
+    document.getElementById('statChars').textContent = text.length;
+    document.getElementById('statLetters').textContent = (text.match(/[a-zA-Z]/g)||[]).length;
+    document.getElementById('statWords').textContent = text.trim() ? text.trim().split(/\s+/).length : 0;
+  }
+
+  // ── History ──
+  function addHistory(m, input, output, shift) {
+    history.unshift({ mode: m, input, output, shift });
+    if (history.length > 8) history.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const section = document.getElementById('historySection');
+    const list = document.getElementById('historyList');
+    if (!history.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    list.innerHTML = history.map(h => `
+      <div class="history-item">
+        <span class="history-badge ${h.mode==='decrypt'?'badge-dec':'badge-enc'}">${h.mode.toUpperCase()}</span>
+        <span class="history-text" title="${h.input}">${h.input}</span>
+        <span class="history-result" title="${h.output}">${h.output}</span>
+        <span class="history-shift">+${h.shift}</span>
+      </div>`).join('');
+  }
+
+  // ── Copy ──
+  function copyOutput() {
+    const text = document.getElementById('outputBox').textContent;
+    navigator.clipboard.writeText(text).then(() => showToast('📋 Copied to clipboard!')).catch(() => showToast('⚠ Copy failed'));
+  }
+
+  function clearInput() {
+    document.getElementById('inputText').value = '';
+    liveProcess();
+  }
+
+  // ── Toast ──
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // ── Init ──
+  renderAlpha();
+  liveProcess();
+</script>
+</body>
+</html>
